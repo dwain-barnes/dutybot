@@ -1,0 +1,95 @@
+services:
+  # --- CPU llama.cpp server (default, runs with `docker compose up`) ---
+  llama-server:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    container_name: dutybot-llama
+    networks:
+      default:
+        aliases:
+          - llama-server
+    volumes:
+      - models:/models
+      - ./llama-server/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    environment:
+      - MODEL_REPO=${MODEL_REPO:-EryriLabs/dutybot-GGUF}
+      - MODEL_FILE=${MODEL_FILE:-domain_adapted-Q4_K_M.gguf}
+      - CTX_SIZE=${CTX_SIZE:-4096}
+      - N_GPU_LAYERS=0
+    ports:
+      - "${LLAMA_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+
+  # --- CUDA llama.cpp server (use: docker compose --profile cuda up --scale llama-server=0) ---
+  llama-server-cuda:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    profiles: ["cuda"]
+    container_name: dutybot-llama-cuda
+    networks:
+      default:
+        aliases:
+          - llama-server
+    volumes:
+      - models:/models
+      - ./llama-server/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    environment:
+      - MODEL_REPO=${MODEL_REPO:-EryriLabs/dutybot-GGUF}
+      - MODEL_FILE=${MODEL_FILE:-domain_adapted-Q4_K_M.gguf}
+      - CTX_SIZE=${CTX_SIZE:-4096}
+      - N_GPU_LAYERS=${N_GPU_LAYERS:-999}
+    ports:
+      - "${LLAMA_PORT:-8080}:8080"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+
+  # --- SearXNG ---
+  searxng:
+    image: searxng/searxng:latest
+    container_name: dutybot-searxng
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+    environment:
+      - SEARXNG_BASE_URL=http://searxng:8080/
+    ports:
+      - "${SEARXNG_PORT:-4000}:8080"
+    restart: unless-stopped
+
+  # --- DutyBot App ---
+  dutybot:
+    build: ./dutybot
+    container_name: dutybot-app
+    volumes:
+      - dutybot-data:/app/data
+    ports:
+      - "${DUTYBOT_PORT:-5000}:5000"
+    environment:
+      - LLAMA_URL=http://llama-server:8080
+      - SEARXNG_URL=http://searxng:8080
+      - DATABASE_PATH=/app/data/dutybot.db
+      - MAX_CONTEXT_MESSAGES=${MAX_CONTEXT_MESSAGES:-20}
+    depends_on:
+      - searxng
+    restart: unless-stopped
+
+volumes:
+  models:
+  dutybot-data:

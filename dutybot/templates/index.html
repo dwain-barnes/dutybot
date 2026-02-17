@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DutyBot — UK Police Duty Assistant</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Mobile overlay -->
+        <div id="mobile-overlay" class="mobile-overlay" onclick="closeSidebar()"></div>
+
+        <!-- Sidebar -->
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <h1>DutyBot</h1>
+                <span class="badge">Training Use</span>
+            </div>
+            <button class="new-chat-btn" onclick="newChat()">+ New Chat</button>
+            <div id="conversations-list" class="conversations-list"></div>
+            <div class="sidebar-footer">
+                <div class="memory-toggle" onclick="toggleMemoryPanel()">
+                    <span>Bot Memory</span>
+                    <span id="memory-count" class="memory-count">0</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Memory Panel -->
+        <div id="memory-panel" class="memory-panel">
+            <h3>
+                Bot Memory
+                <button class="clear-btn" onclick="clearMemory()">Clear all</button>
+            </h3>
+            <div id="memory-list" class="memory-list">
+                <div class="memory-empty">No memories yet.</div>
+            </div>
+        </div>
+
+        <!-- Main Area -->
+        <main class="main-area">
+            <div class="chat-header">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <button class="mobile-menu-btn" onclick="toggleSidebar()">&#9776;</button>
+                    <span id="chat-title" class="chat-title">DutyBot</span>
+                </div>
+                <div class="verify-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    Answers verified against legislation.gov.uk
+                </div>
+            </div>
+
+            <div id="messages-container" class="messages-container">
+                <!-- Welcome Screen -->
+                <div id="welcome-screen" class="welcome">
+                    <h2>DutyBot</h2>
+                    <p>UK Police Duty Assistant for training and educational purposes.
+                       Ask about offences, points to prove, legislation, and operational guidance.</p>
+                    <div class="welcome-grid">
+                        <div class="welcome-card" onclick="askQuestion('What are the points to prove for Section 18 GBH?')">
+                            What are the points to prove for Section 18 GBH?
+                        </div>
+                        <div class="welcome-card" onclick="askQuestion('Explain the difference between assault by beating and ABH')">
+                            Explain the difference between assault by beating and ABH
+                        </div>
+                        <div class="welcome-card" onclick="askQuestion('What powers does Section 1 PACE give for stop and search?')">
+                            What powers does Section 1 PACE give for stop and search?
+                        </div>
+                        <div class="welcome-card" onclick="askQuestion('When can I arrest without a warrant under Section 24 PACE?')">
+                            When can I arrest without a warrant under Section 24 PACE?
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chat Messages -->
+                <div id="chat-messages" style="display:none; flex-direction:column; gap:16px;"></div>
+
+                <!-- Typing Indicator -->
+                <div id="typing-indicator" class="typing-indicator">
+                    <div class="message assistant" style="max-width:800px; width:100%; margin:0 auto;">
+                        <div class="message-avatar">DB</div>
+                        <div class="message-bubble" style="padding:12px 20px;">
+                            <span></span><span></span><span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input -->
+            <div class="input-area">
+                <div class="input-wrapper">
+                    <textarea
+                        id="message-input"
+                        placeholder="Ask about UK policing, offences, legislation..."
+                        rows="1"
+                    ></textarea>
+                    <button id="send-btn" class="send-btn" onclick="sendMessage()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                    </button>
+                </div>
+                <div class="disclaimer">
+                    For training and educational purposes only. Always verify against official sources and local force policy.
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
