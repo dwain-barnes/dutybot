@@ -217,6 +217,36 @@ def chat():
     for row in history_rows[-MAX_CONTEXT_MESSAGES:]:
         messages.append({"role": row["role"], "content": row["content"]})
 
+    # Search legislation.gov.uk BEFORE generating response (RAG)
+    verification = None
+    legal_keywords = [
+        "section", "offence", "offense", "arrest", "assault", "gbh", "abh",
+        "theft", "burglary", "robbery", "pace", "act", "law", "crime",
+        "criminal", "powers", "evidence", "caution", "charge", "custody",
+        "bail", "warrant", "search", "stop", "force", "weapon", "drug",
+        "fraud", "damage", "public order", "harassment", "stalking",
+        "domestic", "murder", "manslaughter", "definition", "points to prove",
+        "stolen", "steal", "knife", "firearm", "trespass", "criminal damage",
+    ]
+    should_verify = len(user_message.split()) > 2 and any(
+        kw in user_message.lower() for kw in legal_keywords
+    )
+    if should_verify:
+        try:
+            verification = verify_answer(user_message)
+        except Exception:
+            pass
+
+    # If we found legislation sources, inject snippets into the last user message
+    if verification and verification.get("sources"):
+        snippets = "\n".join(
+            f"- {s['title']}: {s['snippet']}"
+            for s in verification["sources"] if s.get("snippet")
+        )
+        messages[-1]["content"] += (
+            f"\n\n[Legislation lookup results from legislation.gov.uk]\n{snippets}"
+        )
+
     # Call llama.cpp
     try:
         resp = requests.post(
@@ -251,26 +281,6 @@ def chat():
         "UPDATE conversations SET updated_at = ? WHERE id = ?", (ts, conv_id)
     )
     db.commit()
-
-    # Background verification — only for legal/policing queries
-    verification = None
-    legal_keywords = [
-        "section", "offence", "offense", "arrest", "assault", "gbh", "abh",
-        "theft", "burglary", "robbery", "pace", "act", "law", "crime",
-        "criminal", "powers", "evidence", "caution", "charge", "custody",
-        "bail", "warrant", "search", "stop", "force", "weapon", "drug",
-        "fraud", "damage", "public order", "harassment", "stalking",
-        "domestic", "murder", "manslaughter", "definition", "points to prove",
-        "stolen", "steal", "knife", "firearm", "trespass", "criminal damage",
-    ]
-    should_verify = len(user_message.split()) > 2 and any(
-        kw in user_message.lower() for kw in legal_keywords
-    )
-    if should_verify:
-        try:
-            verification = verify_answer(user_message)
-        except Exception:
-            pass
 
     # Extract memories (best-effort) — only when message likely contains personal info
     trigger_phrases = ["i am", "i'm", "i work", "my rank", "my force", "my team", "my unit", "my station"]

@@ -109,7 +109,7 @@ function appendMessage(role, content, verification = null) {
         verifyHtml = `
             <div class="verify-panel">
                 <div class="verify-header" onclick="this.parentElement.classList.toggle('open')">
-                    <span class="verify-badge">Verified</span>
+                    <span class="verify-badge">Sources</span>
                     <span class="verify-text">${verification.count} source${verification.count !== 1 ? 's' : ''} found on legislation.gov.uk</span>
                     <span class="verify-chevron"></span>
                 </div>
