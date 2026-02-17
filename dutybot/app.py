@@ -175,11 +175,13 @@ def chat():
     # Build messages for llama.cpp
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-    # Add memory context
+    # Add memory context (filter out suspiciously long values)
     memories = db.execute("SELECT key, value FROM memory").fetchall()
     if memories:
-        mem_text = "\n".join(f"- {m['key']}: {m['value']}" for m in memories)
-        messages[0]["content"] += f"\n\nThings you remember about this user:\n{mem_text}"
+        valid = [(m['key'], m['value']) for m in memories if len(m['value']) < 80]
+        if valid:
+            mem_text = "\n".join(f"- {k}: {v}" for k, v in valid)
+            messages[0]["content"] += f"\n\nThings you remember about this user:\n{mem_text}"
 
     # Add conversation history (limited)
     for row in history_rows[-MAX_CONTEXT_MESSAGES:]:
@@ -226,11 +228,13 @@ def chat():
     except Exception:
         pass
 
-    # Extract memories (best-effort)
-    try:
-        extract_memory(db, user_message, assistant_content)
-    except Exception as e:
-        app.logger.error(f"Memory extraction call failed: {e}", exc_info=True)
+    # Extract memories (best-effort) — only when message likely contains personal info
+    trigger_phrases = ["i am", "i'm", "i work", "my rank", "my force", "my team", "my unit", "my station"]
+    if any(phrase in user_message.lower() for phrase in trigger_phrases):
+        try:
+            extract_memory(db, user_message, assistant_content)
+        except Exception as e:
+            app.logger.error(f"Memory extraction call failed: {e}", exc_info=True)
 
     return jsonify({
         "conversation_id": conv_id,
@@ -292,15 +296,25 @@ def extract_memory(db, user_message, assistant_response):
                 "model": "dutybot",
                 "messages": [
                     {
+                        "role": "system",
+                        "content": (
+                            "You are a JSON extraction assistant. You ONLY output valid JSON objects. "
+                            "You NEVER output explanations, definitions, or legal text. "
+                            "Values must be short identifiers of 1-3 words only."
+                        ),
+                    },
+                    {
                         "role": "user",
                         "content": (
-                            "Read this exchange and extract key facts about the user.\n\n"
+                            "Extract ONLY short factual identifiers about the user from this exchange.\n\n"
                             f"USER: {user_message}\n"
                             f"ASSISTANT: {assistant_response[:500]}\n\n"
-                            "Now return ONLY a JSON object with the facts. "
-                            "Keys should be fact names like rank, force, specialization. "
-                            "Example: {\"rank\": \"PC\", \"force\": \"Met Police\"}\n"
-                            "If no facts, return: {}\n"
+                            "Rules:\n"
+                            "- Only extract rank, force, or specialization\n"
+                            "- Values must be 1-3 words (e.g. \"PC\", \"Met Police\", \"Public Order\")\n"
+                            "- Do NOT include definitions, explanations, or legal text as values\n"
+                            "- If the user has NOT explicitly stated their rank, force, or specialization, "
+                            "return exactly: {}\n"
                             "JSON:"
                         ),
                     },
@@ -331,7 +345,7 @@ def extract_memory(db, user_message, assistant_response):
 
         ts = now_iso()
         for key, value in facts.items():
-            if key and value and isinstance(value, str) and len(value) < 500:
+            if key and value and isinstance(value, str) and len(value) < 80 and "\n" not in value:
                 db.execute(
                     "INSERT INTO memory (id, key, value, updated_at) VALUES (?, ?, ?, ?) "
                     "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
