@@ -17,23 +17,26 @@ if [ ! -f "${MODEL_PATH}" ]; then
     echo "==> Model not found at ${MODEL_PATH}, downloading..."
     DOWNLOAD_URL="https://huggingface.co/${MODEL_REPO}/resolve/main/${MODEL_FILE}"
 
-    if command -v huggingface-cli &> /dev/null; then
-        echo "==> Using huggingface-cli"
-        huggingface-cli download "${MODEL_REPO}" "${MODEL_FILE}" \
-            --local-dir "${MODEL_DIR}" \
-            --local-dir-use-symlinks False
-    elif command -v curl &> /dev/null; then
-        echo "==> Using curl to download from ${DOWNLOAD_URL}"
-        curl -L -o "${MODEL_PATH}" "${DOWNLOAD_URL}"
-    elif command -v wget &> /dev/null; then
-        echo "==> Using wget to download from ${DOWNLOAD_URL}"
-        wget -O "${MODEL_PATH}" "${DOWNLOAD_URL}"
-    else
-        # Last resort: install curl via apt
-        echo "==> No download tool found, installing curl..."
-        apt-get update -qq && apt-get install -y -qq curl > /dev/null 2>&1
-        curl -L -o "${MODEL_PATH}" "${DOWNLOAD_URL}"
+    # Install huggingface_hub (handles HF's Xet storage properly)
+    if ! command -v python3 &> /dev/null; then
+        echo "==> Installing python3 + pip..."
+        apt-get update -qq && apt-get install -y -qq python3 python3-pip > /dev/null 2>&1
     fi
+    echo "==> Installing huggingface_hub..."
+    python3 -m pip install --quiet huggingface_hub hf_xet 2>/dev/null || \
+        python3 -m pip install --quiet --break-system-packages huggingface_hub hf_xet
+
+    echo "==> Downloading ${MODEL_REPO}/${MODEL_FILE} via huggingface_hub..."
+    python3 -c "
+from huggingface_hub import hf_hub_download
+hf_hub_download(
+    repo_id='${MODEL_REPO}',
+    filename='${MODEL_FILE}',
+    local_dir='${MODEL_DIR}',
+    local_dir_use_symlinks=False,
+)
+print('Download complete.')
+"
     echo "==> Download complete."
 else
     echo "==> Model already cached at ${MODEL_PATH}"
