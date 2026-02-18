@@ -197,6 +197,16 @@ The response includes a `verification` object with legislation.gov.uk sources th
 | CUDA not detected | Ensure [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) is installed and `nvidia-smi` works inside Docker |
 | Verification shows no sources | SearXNG may be rate-limited by upstream search engines. The chat still works — verification is supplementary |
 
+## Disclaimer
+
+This project is provided strictly for **research and educational purposes only**. It is **not intended for production use, operational deployment, or commercial purposes**.
+
+- **No warranty**: This software is provided "as is", without warranty of any kind, express or implied.
+- **No liability**: The author(s) accept no responsibility or liability for any errors, omissions, or outcomes arising from the use of this software.
+- **Not legal advice**: Nothing produced by DutyBot constitutes legal, professional, or operational advice. Always consult qualified professionals and official sources.
+- **Non-commercial**: The model weights are licensed under CC-BY-NC-ND-4.0 and must not be used for commercial purposes.
+- **Use at your own risk**: You are solely responsible for how you use this project and any decisions made based on its output.
+
 ## License
 
 - **Application code**: MIT
