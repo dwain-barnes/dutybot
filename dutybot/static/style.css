@@ -384,6 +384,31 @@ html, body {
     transform: rotate(180deg);
 }
 
+.verify-panel.warn {
+    border-color: rgba(245, 158, 11, 0.35);
+}
+
+.verify-panel.warn .verify-header {
+    cursor: default;
+}
+
+.verify-panel.warn .verify-header:hover {
+    background: none;
+}
+
+.verify-badge.warn {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--warning);
+}
+
+.citation-warn {
+    padding: 8px 12px;
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--warning);
+    border-top: 1px solid var(--border);
+}
+
 .verify-sources {
     display: none;
     padding: 0 12px 10px;

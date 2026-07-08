@@ -16,8 +16,11 @@ services:
       - MODEL_FILE=${MODEL_FILE:-domain_adapted-Q4_K_M.gguf}
       - CTX_SIZE=${CTX_SIZE:-4096}
       - N_GPU_LAYERS=0
+      - CHAT_TEMPLATE=${CHAT_TEMPLATE:-chatml}
     ports:
-      - "${LLAMA_PORT:-8080}:8080"
+      # Loopback only: the raw llama.cpp API has no auth and no system prompt,
+      # so it must not be reachable from the LAN.
+      - "127.0.0.1:${LLAMA_PORT:-8080}:8080"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -44,8 +47,11 @@ services:
       - MODEL_FILE=${MODEL_FILE:-domain_adapted-Q4_K_M.gguf}
       - CTX_SIZE=${CTX_SIZE:-4096}
       - N_GPU_LAYERS=${N_GPU_LAYERS:-999}
+      - CHAT_TEMPLATE=${CHAT_TEMPLATE:-chatml}
     ports:
-      - "${LLAMA_PORT:-8080}:8080"
+      # Loopback only: the raw llama.cpp API has no auth and no system prompt,
+      # so it must not be reachable from the LAN.
+      - "127.0.0.1:${LLAMA_PORT:-8080}:8080"
     deploy:
       resources:
         reservations:
@@ -70,7 +76,9 @@ services:
     environment:
       - SEARXNG_BASE_URL=http://searxng:8080/
     ports:
-      - "${SEARXNG_PORT:-4000}:8080"
+      # Loopback only: with the limiter disabled this would otherwise be an
+      # open, unauthenticated search proxy for anyone on the network.
+      - "127.0.0.1:${SEARXNG_PORT:-4000}:8080"
     restart: unless-stopped
 
   # --- DutyBot App ---
@@ -86,8 +94,15 @@ services:
       - SEARXNG_URL=http://searxng:8080
       - DATABASE_PATH=/app/data/dutybot.db
       - MAX_CONTEXT_MESSAGES=${MAX_CONTEXT_MESSAGES:-20}
+      - CTX_SIZE=${CTX_SIZE:-4096}
     depends_on:
       - searxng
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
 
 volumes:

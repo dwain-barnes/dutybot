@@ -1,6 +1,7 @@
 const API = '';
 let currentConversationId = null;
 let memoryPanelOpen = false;
+let isSending = false;
 
 // DOM elements
 const messagesContainer = document.getElementById('messages-container');
@@ -43,7 +44,9 @@ messageInput.addEventListener('keydown', (e) => {
 // Send message
 async function sendMessage(prefill = null) {
     const text = prefill || messageInput.value.trim();
-    if (!text) return;
+    // isSending also guards the Enter-key path, which bypasses the disabled button
+    if (!text || isSending) return;
+    isSending = true;
 
     messageInput.value = '';
     messageInput.style.height = 'auto';
@@ -71,6 +74,12 @@ async function sendMessage(prefill = null) {
         const data = await resp.json();
 
         if (data.error) {
+            // The user message was still saved server-side — adopt the conversation
+            // so a retry continues it instead of creating an orphan.
+            if (!currentConversationId && data.conversation_id) {
+                currentConversationId = data.conversation_id;
+                loadConversations();
+            }
             appendMessage('assistant', `Error: ${data.error}`);
         } else {
             // Update conversation ID if new
@@ -86,6 +95,7 @@ async function sendMessage(prefill = null) {
     } catch (err) {
         appendMessage('assistant', `Connection error: ${err.message}. Is the server running?`);
     } finally {
+        isSending = false;
         typingIndicator.classList.remove('visible');
         sendBtn.disabled = false;
         messageInput.focus();
@@ -100,22 +110,44 @@ function appendMessage(role, content, verification = null) {
     const avatar = role === 'user' ? 'You' : 'DB';
     let verifyHtml = '';
 
-    if (verification && verification.sources && verification.sources.length > 0 && role === 'assistant') {
-        const sourcesHtml = verification.sources.map(s =>
-            `<a href="${escapeHtml(s.url)}" target="_blank" rel="noopener">${escapeHtml(s.title)}</a>
-             <span class="verify-snippet">${escapeHtml(s.snippet).substring(0, 150)}${s.snippet.length > 150 ? '...' : ''}</span>`
-        ).join('');
+    if (verification && role === 'assistant') {
+        if (verification.status === 'found' && verification.sources && verification.sources.length > 0) {
+            const sourcesHtml = verification.sources.map(s => {
+                const snippet = s.snippet || '';
+                const shortSnippet = snippet.length > 150 ? snippet.substring(0, 150) + '...' : snippet;
+                return `<a href="${escapeHtml(safeUrl(s.url))}" target="_blank" rel="noopener">${escapeHtml(s.title)}</a>
+                 <span class="verify-snippet">${escapeHtml(shortSnippet)}</span>`;
+            }).join('');
 
-        verifyHtml = `
-            <div class="verify-panel">
-                <div class="verify-header" onclick="this.parentElement.classList.toggle('open')">
-                    <span class="verify-badge">Sources</span>
-                    <span class="verify-text">${verification.count} source${verification.count !== 1 ? 's' : ''} found on legislation.gov.uk</span>
-                    <span class="verify-chevron"></span>
+            const cc = verification.citation_check;
+            const ccHtml = (cc && cc.unmatched && cc.unmatched.length > 0)
+                ? `<div class="citation-warn">Cited but not found in the retrieved sources: ${escapeHtml(cc.unmatched.join('; '))} — verify before relying on these.</div>`
+                : '';
+
+            verifyHtml = `
+                <div class="verify-panel">
+                    <div class="verify-header" onclick="this.parentElement.classList.toggle('open')">
+                        <span class="verify-badge">Sources</span>
+                        <span class="verify-text">${verification.count} source${verification.count !== 1 ? 's' : ''} found on legislation.gov.uk</span>
+                        <span class="verify-chevron"></span>
+                    </div>
+                    <div class="verify-sources">${sourcesHtml}</div>
+                    ${ccHtml}
                 </div>
-                <div class="verify-sources">${sourcesHtml}</div>
-            </div>
-        `;
+            `;
+        } else if (verification.status === 'none' || verification.status === 'failed') {
+            const reason = verification.status === 'failed'
+                ? 'the legislation.gov.uk lookup failed'
+                : 'no matching legislation.gov.uk sources were found';
+            verifyHtml = `
+                <div class="verify-panel warn">
+                    <div class="verify-header">
+                        <span class="verify-badge warn">Not verified</span>
+                        <span class="verify-text">This answer was not checked against legislation.gov.uk — ${reason}. Verify statutory details against official sources.</span>
+                    </div>
+                </div>
+            `;
+        }
     }
 
     div.innerHTML = `
@@ -175,9 +207,13 @@ async function loadConversations() {
             div.className = `conv-item${conv.id === currentConversationId ? ' active' : ''}`;
             div.innerHTML = `
                 <span class="title">${escapeHtml(conv.title)}</span>
-                <button class="delete-btn" onclick="event.stopPropagation(); deleteConversation('${conv.id}')">&times;</button>
+                <button class="delete-btn">&times;</button>
             `;
             div.addEventListener('click', () => loadConversation(conv.id, conv.title));
+            div.querySelector('.delete-btn').addEventListener('click', (event) => {
+                event.stopPropagation();
+                deleteConversation(conv.id);
+            });
             conversationsList.appendChild(div);
         });
     } catch (err) {
@@ -246,13 +282,18 @@ async function loadMemory() {
         if (memories.length === 0) {
             memoryList.innerHTML = '<div class="memory-empty">No memories yet. DutyBot will remember key facts as you chat.</div>';
         } else {
+            // No inline onclick here: memory keys are model-generated text, so they
+            // must never be spliced into executable attributes.
             memoryList.innerHTML = memories.map(m => `
                 <div class="memory-item">
                     <span class="key">${escapeHtml(m.key)}</span>
                     <span class="value">${escapeHtml(m.value)}</span>
-                    <button class="remove-btn" onclick="deleteMemory('${escapeHtml(m.key)}')">&times;</button>
+                    <button class="remove-btn" data-key="${escapeHtml(m.key)}">&times;</button>
                 </div>
             `).join('');
+            memoryList.querySelectorAll('.remove-btn').forEach(btn => {
+                btn.addEventListener('click', () => deleteMemory(btn.dataset.key));
+            });
         }
     } catch (err) {
         console.error('Failed to load memory:', err);
@@ -300,9 +341,25 @@ function askQuestion(text) {
     sendMessage(text);
 }
 
-// Utility
+// Utility — escapes quotes too, so output is safe inside HTML attributes
 function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// Only allow http(s) links — search results could carry javascript: URLs
+function safeUrl(url) {
+    try {
+        const parsed = new URL(url);
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+            return parsed.href;
+        }
+    } catch (err) {
+        // fall through
+    }
+    return '#';
 }

@@ -7,6 +7,7 @@ MODEL_DIR="/models"
 MODEL_PATH="${MODEL_DIR}/${MODEL_FILE}"
 N_GPU_LAYERS="${N_GPU_LAYERS:-999}"
 CTX_SIZE="${CTX_SIZE:-4096}"
+CHAT_TEMPLATE="${CHAT_TEMPLATE:-chatml}"
 HOST="0.0.0.0"
 PORT="8080"
 
@@ -48,7 +49,7 @@ if [ ! -f "${MODEL_PATH}" ]; then
     exit 1
 fi
 
-echo "==> Starting llama-server with ${N_GPU_LAYERS} GPU layers, ctx_size=${CTX_SIZE}"
+echo "==> Starting llama-server with ${N_GPU_LAYERS} GPU layers, ctx_size=${CTX_SIZE}, chat_template=${CHAT_TEMPLATE:-embedded}"
 
 # Find llama-server binary
 LLAMA_BIN=""
@@ -64,10 +65,17 @@ if [ -z "$LLAMA_BIN" ]; then
 fi
 echo "==> Using binary: ${LLAMA_BIN}"
 
-exec "${LLAMA_BIN}" \
-    --model "${MODEL_PATH}" \
-    --host "${HOST}" \
-    --port "${PORT}" \
-    --ctx-size "${CTX_SIZE}" \
-    --n-gpu-layers "${N_GPU_LAYERS}" \
-    --chat-template chatml
+ARGS=(
+    --model "${MODEL_PATH}"
+    --host "${HOST}"
+    --port "${PORT}"
+    --ctx-size "${CTX_SIZE}"
+    --n-gpu-layers "${N_GPU_LAYERS}"
+)
+# "embedded" (or empty) uses the chat template baked into the GGUF — for this
+# model that is the gpt-oss "harmony" template the base model was trained on.
+if [ -n "${CHAT_TEMPLATE}" ] && [ "${CHAT_TEMPLATE}" != "embedded" ]; then
+    ARGS+=(--chat-template "${CHAT_TEMPLATE}")
+fi
+
+exec "${LLAMA_BIN}" "${ARGS[@]}"
